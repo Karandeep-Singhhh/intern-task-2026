@@ -1,147 +1,54 @@
-# Pangea Chat: Gen AI Intern Task (Summer 2026)
+# Language Feedback API
 
-## ⚠️ Before You Begin: Eligibility Requirements
+## Overview
+Built an **LLM-powered language feedback API** that analyzes learner-written sentences and returns structured correction feedback.
 
-**Do not invest time in this task unless you meet ALL of the following criteria:**
+## Design Decisions
+- Decided to use Claude out of personal preference and access to ClaudeCode/pro models through my school providing a free subscription.
+  - This meant changing all basic boilerplate code that referenced the preset OpenAI API key to using my Claude key.
+- Chose claude-sonnet-4-6 — can be scaled and isn't as costly as other models like Opus-4-6
+- Single-call prompt approach — reliable, fast, within 30s limit
+- Temperature set to 0.2 for consistent output
 
-- [ ] You are authorized to work in the United States (or will be by June 2026)
-- [ ] You are available for a **10-week on-site internship in Richmond, Virginia** (approximately June–August 2026). Our team works in person and we've found that interns learn faster with same-room collaboration. This is not a remote position.
-- [ ] You are proficient in written and spoken English
-- [ ] You are currently enrolled in (or have graduated within the past 12 months from) an undergraduate or graduate program, or have equivalent experience
+## Prompt Strategy
 
-**Preference will be given to candidates interested in full-time employment in Richmond, Virginia after the internship.** The full-time role (pending continued NSF funding) is budgeted at **$70,000–$90,000/year**, which goes further in Richmond than in most tech hubs.
+### Preemptive Design Decisions
+- Instructed model to return raw JSON only (no markdown wrapping). That being said, LLMs are only so reliable as we programmers are aware, so I have implemented a response checker as a safety net to ensure it is usable JSON only.
+- Emphasized correct sentence handling explicitly to prevent hallucinated errors — you are not an error finder, you are a sentence analyzer.
+- Added preemptive emphasis on multi-word phrasal grammar to improve detection of errors like missing prepositions.
+- Added preemptive rules to prevent certain errors.
 
-By submitting your solution, you confirm that you meet these requirements. See [RULES.md](RULES.md) for full terms.
+### Post-Testing Adjustments
+- Testing the Japanese sample highlighted a weakness: direct translations vs conversational understanding. The model responded in a description with "the place where you are settled" to refer to where someone lives. This is too formal, and the word "settled" is an awkward phrasing that wouldn't be used in conversation. Thus, I changed the final rule to emphasize that explanations should make sense in conversation, and that word choice and translations should sound like a native speaker. This change resulted in new phrasing of "not places you reside," which is much clearer.
+- Testing the Portuguese sample showed a shortcoming, the model missed an error and thus misclassified the difficulty level as well. The error was due to a required grammatical choice. Initial thoughts: the word that required the preemptive word was about 4 words away. I presume the model isn't emphasizing the importance of longer phrases as such being grammatically correct, which may also be partly due to the fact that it is Portuguese rather than English. Adding adjustments accordingly was not sufficient. I identify this as a prepositional error, which the model evidently misses repeatedly. I expect iteration of some sort would fix this, however.
 
----
+## Known Limitations
+- Subtle prepositional errors in Portuguese (and likely other languages) are occasionally missed.
+- Non-ASCII input via terminal has encoding issues on Windows — use file-based input (`-d @file.json`) as workaround. Testing the Japanese sample showed that certain scripts have parsing issues in which the model is unable to read or understand the input at all. To work around this, the input was written in a separate json file, which was called in the POST request. This works because through Git Bash Terminals on Windows, the shell's input handling has known issues with encoding non-ASCII characters, however, in a separate file curl reads the information directly from the file rather than through the shell.
 
-## About Pangea Chat
+## How to Run
 
-[Pangea Chat](https://pangea.chat) is an AI-powered language learning app funded by the U.S. National Science Foundation. Students learn languages by chatting with peers, assisted by AI feedback tools: grammar checking, interactive translation, pronunciation help, and conversation activities.
-
-This task is modeled after real work you'd do as an intern on the team.
-
-## Why This Process
-
-We received over **2,200 applications** for up to **3 intern positions**. Resume screening alone can't give 2,200 people a fair shot. It inevitably favors school names and network connections over actual ability.
-
-So we built this task to let your skills speak for themselves. Everyone gets the same starter code, the same rubric, and the same week. Whether you're at a top-10 CS program or a community college, your submission is scored the same way.
-
-Is automated scoring perfect? No. But it's more equitable than a human skimming 2,200 resumes, and the top submissions all get human review.
-
-## The Task
-
-Build an **LLM-powered language feedback API** that analyzes learner-written sentences and returns structured correction feedback.
-
-Given a sentence in a target language and the learner's native language, your API must return:
-
-1. A **corrected sentence** (minimal edits that preserve the learner's voice)
-2. A list of **errors**, each with the original text, correction, error category, and a learner-friendly explanation written in the native language
-3. Whether the sentence **is correct** (boolean)
-4. A **CEFR difficulty rating** (A1–C2) based on sentence complexity
-
-### Endpoint
-
-```
-POST /feedback
-```
-
-**Request body** (see [schema/request.schema.json](schema/request.schema.json)):
-
-```json
-{
-  "sentence": "Yo soy fue al mercado ayer.",
-  "target_language": "Spanish",
-  "native_language": "English"
-}
-```
-
-**Response body** (see [schema/response.schema.json](schema/response.schema.json)):
-
-```json
-{
-  "corrected_sentence": "Yo fui al mercado ayer.",
-  "is_correct": false,
-  "errors": [
-    {
-      "original": "soy fue",
-      "correction": "fui",
-      "error_type": "conjugation",
-      "explanation": "You mixed two verb forms. 'Soy' is present tense of 'ser' (to be), and 'fue' is past tense of 'ir' (to go). You only need 'fui' (I went)."
-    }
-  ],
-  "difficulty": "A2"
-}
-```
-
-### Requirements
-
-1. **Working HTTP endpoint:** must respond to `POST /feedback` with JSON conforming to the response schema
-2. **Health check:** `GET /health` must return a 200 response
-3. **Prompt engineering:** design a system prompt that reliably produces accurate, well-structured feedback
-4. **Test suite:** at least 5 test cases covering different languages, error types, and edge cases (correct sentences, multiple errors, non-Latin scripts)
-5. **README:** replace this README explaining your design decisions, prompt strategy, and how to run your solution
-6. **Docker support:** `docker compose up` must start your server on port 8000. Your Docker Compose service must be named `feedback-api` (as in the starter repo). Your test dependencies should be installed in the Docker image so tests can run inside the container.
-7. **Response time:** each request to `/feedback` must return within **30 seconds**. Requests that exceed this timeout will be treated as failures during scoring.
-
-### Allowed error types
-
-`grammar`, `spelling`, `word_choice`, `punctuation`, `word_order`, `missing_word`, `extra_word`, `conjugation`, `gender_agreement`, `number_agreement`, `tone_register`, `other`
-
-### Allowed difficulty levels
-
-`A1`, `A2`, `B1`, `B2`, `C1`, `C2` (CEFR scale)
-
-## Getting Started
-
-This repo contains a **complete, working submission** out of the box: the API endpoint, Dockerfile, Docker Compose config, JSON schemas, and a basic test suite all work as-is. You do not need to build any infrastructure from scratch. The boilerplate is done so you can focus your time on what matters: **your prompt, your accuracy, your tests, and your code quality.**
-
-Study the sample, then replace or rewrite it with your own approach. The sample is intentionally basic (a straightforward prompt with no caching, no retry logic, and minimal error handling), so treat it as a starting point rather than a ceiling.
-
-### Run locally
-
+### Local
 ```bash
-# 1. Clone and enter the repo
-git clone https://github.com/pangeachat/intern-task-2026.git
-cd intern-task-2026
-
-# 2. Create a virtual environment
-python -m venv .venv
-source .venv/bin/activate
-
-# 3. Install dependencies
+python -m venv venv
+source venv/Scripts/activate
 pip install -r requirements.txt
-
-# 4. Set your API key
-cp .env.example .env
-# Edit .env and add your OpenAI or Anthropic API key
-
-# 5. Start the server
+cp .env.example .env  # add ANTHROPIC_API_KEY
 uvicorn app.main:app --reload
-
-# 6. Test it
-curl -X POST http://localhost:8000/feedback \
-  -H "Content-Type: application/json" \
-  -d '{"sentence": "Yo soy fue al mercado ayer.", "target_language": "Spanish", "native_language": "English"}'
 ```
 
-### Run with Docker
-
+### Docker
 ```bash
 cp .env.example .env
-# Edit .env with your API key
 docker compose up --build
 ```
 
-### Run tests
-
+### Tests
 ```bash
-# Unit tests (no API key needed)
 pytest tests/test_feedback_unit.py tests/test_schema.py -v
-
-# Integration tests (requires API key in .env)
-pytest tests/test_feedback_integration.py -v
+pytest tests/test_feedback_integration.py -v  # requires API key
 ```
+<<<<<<< HEAD
 
 ## How to Submit
 
@@ -256,3 +163,5 @@ If something is ambiguous, make a reasonable assumption, state it in your README
 ---
 
 See [RULES.md](RULES.md) for full assessment rules, eligibility, and legal terms.
+=======
+>>>>>>> f93752f (final submission of task)

@@ -1,0 +1,1 @@
+{"corrected_sentence":"Eu quero comprar um presente para minha irmã, mas não sei o que ela gosta.","is_correct":false,"errors":[{"original":"prezente","correction":"presente","error_type":"spelling","explanation":"The word 'present/gift' in Portuguese is spelled 'presente', not 'prezente'. The letter 's' is used here, not 'z'."}],"difficulty":"A2"}

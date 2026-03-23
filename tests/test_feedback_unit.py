@@ -9,11 +9,11 @@ from app.models import FeedbackRequest
 
 
 def _mock_completion(response_data: dict) -> MagicMock:
-    """Build a mock ChatCompletion response."""
-    choice = MagicMock()
-    choice.message.content = json.dumps(response_data)
+    """Build a mock Anthropic Messages response."""
+    content_block = MagicMock()
+    content_block.text = json.dumps(response_data)
     completion = MagicMock()
-    completion.choices = [choice]
+    completion.content = [content_block]
     return completion
 
 
@@ -33,9 +33,9 @@ async def test_feedback_with_errors():
         "difficulty": "A2",
     }
 
-    with patch("app.feedback.AsyncOpenAI") as MockClient:
+    with patch("app.feedback.AsyncAnthropic") as MockClient:
         instance = MockClient.return_value
-        instance.chat.completions.create = AsyncMock(
+        instance.messages.create = AsyncMock(
             return_value=_mock_completion(mock_response)
         )
 
@@ -62,9 +62,9 @@ async def test_feedback_correct_sentence():
         "difficulty": "B1",
     }
 
-    with patch("app.feedback.AsyncOpenAI") as MockClient:
+    with patch("app.feedback.AsyncAnthropic") as MockClient:
         instance = MockClient.return_value
-        instance.chat.completions.create = AsyncMock(
+        instance.messages.create = AsyncMock(
             return_value=_mock_completion(mock_response)
         )
 
@@ -102,9 +102,9 @@ async def test_feedback_multiple_errors():
         "difficulty": "A1",
     }
 
-    with patch("app.feedback.AsyncOpenAI") as MockClient:
+    with patch("app.feedback.AsyncAnthropic") as MockClient:
         instance = MockClient.return_value
-        instance.chat.completions.create = AsyncMock(
+        instance.messages.create = AsyncMock(
             return_value=_mock_completion(mock_response)
         )
 
@@ -118,3 +118,40 @@ async def test_feedback_multiple_errors():
     assert result.is_correct is False
     assert len(result.errors) == 2
     assert all(e.error_type == "gender_agreement" for e in result.errors)
+
+
+# Testing markdown-wrapped JSON is stripped and parsed correctly
+@pytest.mark.asyncio
+async def test_markdown_stripping():
+    mock_response = {
+        "corrected_sentence": "Yo fui al mercado ayer.",
+        "is_correct": False,
+        "errors": [
+            {
+                "original": "soy fue",
+                "correction": "fui",
+                "error_type": "conjugation",
+                "explanation": "You mixed two verb forms.",
+            }
+        ],
+        "difficulty": "A2",
+    }
+
+    with patch("app.feedback.AsyncAnthropic") as MockClient:
+        content_block = MagicMock()
+        content_block.text = "```json\n" + json.dumps(mock_response) + "\n```"
+        completion = MagicMock()
+        completion.content = [content_block]
+
+        instance = MockClient.return_value
+        instance.messages.create = AsyncMock(return_value=completion)
+
+        request = FeedbackRequest(
+            sentence="Yo soy fue al mercado ayer.",
+            target_language="Spanish",
+            native_language="English",
+        )
+        result = await get_feedback(request)
+
+    assert result.is_correct is False
+    assert result.corrected_sentence == "Yo fui al mercado ayer."
